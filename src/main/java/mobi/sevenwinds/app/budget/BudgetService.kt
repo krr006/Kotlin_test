@@ -24,23 +24,19 @@ object BudgetService {
 
     suspend fun getYearStats(param: BudgetYearParam): BudgetYearStatsResponse = withContext(Dispatchers.IO) {
         transaction {
-            // Подсчет общего количества записей
             val total = BudgetTable.select { BudgetTable.year eq param.year }.count()
 
-            // Получение данных с сортировкой и пагинацией
             val baseQuery = BudgetTable
                 .join(AuthorTable, JoinType.LEFT, additionalConstraint = { BudgetTable.authorId eq AuthorTable.id })
                 .slice(BudgetTable.columns + AuthorTable.fullName + AuthorTable.date)
                 .select { BudgetTable.year eq param.year }
 
-            // Добавление фильтра по ФИО автора, если он указан
             val filteredQuery = if (param.authorName != null) {
                 baseQuery.andWhere { AuthorTable.fullName.lowerCase() like "%${param.authorName.lowercase()}%" }
             } else {
                 baseQuery
             }
 
-            // Получение данных с сортировкой и пагинацией
             val query = filteredQuery
                 .orderBy(BudgetTable.month to SortOrder.ASC, BudgetTable.amount to SortOrder.DESC)
                 .limit(param.limit, param.offset)
@@ -52,7 +48,6 @@ object BudgetService {
                 BudgetEntity.wrapRow(row).toResponse(fullName, date)
             }
 
-            // Подсчет общей статистики по типам для всего года
             val allRecordsQuery = BudgetTable.select { BudgetTable.year eq param.year }
             val allRecords = BudgetEntity.wrapRows(allRecordsQuery).map { it.toResponse() }
             val sumByType = allRecords.groupBy { it.type.name }.mapValues { it.value.sumOf { v -> v.amount } }
